@@ -125,6 +125,12 @@ jobs:
       - run: echo "Kazumi_windows_${env:tag_safe}.zip build progress"
       - name: Enable Git longpaths
         run: git config --system core.longpaths true
+      # windows-latest does not preinstall yq (macOS/Linux runners do), but
+      # flutter-action with flutter-version-file needs it to parse pubspec.yaml.
+      # Without this the "Set up Flutter" step fails with "yq not found".
+      # Do not remove this step.
+      - name: Install yq (required by flutter-action to parse flutter-version-file on Windows)
+        run: choco install yq -y --no-progress
       - name: Set up Flutter
         uses: subosito/flutter-action@v2.16.0
         with:
