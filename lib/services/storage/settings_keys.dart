@@ -67,6 +67,12 @@ class SettingsKeys {
     true,
     group: SettingGroup.update,
   );
+  // JSON blob for PlayableSourceCache: {bangumiId: PlayableSourceRecord}.
+  static const playableSourceCache = SettingKey<String>(
+    _SettingBoxKey.playableSourceCache,
+    '',
+    group: SettingGroup.misc,
+  );
   static const alwaysOntop = SettingKey<bool>(
     _SettingBoxKey.alwaysOntop,
     false,
@@ -678,6 +684,7 @@ class _SettingBoxKey {
       enableBangumiProxy = 'enableBangumiProxy',
       enableSystemProxy = 'enableSystemProxy',
       defaultStartupPage = 'defaultStartupPage',
+      playableSourceCache = 'playableSourceCache',
 
       /// Deprecated
       isWideScreen = 'isWideScreen',

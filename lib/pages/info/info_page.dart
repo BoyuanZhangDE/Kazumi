@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'dart:ui';
-import 'package:kazumi/bean/dialog/adaptive_bottom_sheet.dart';
 import 'package:kazumi/bean/dialog/dialog_helper.dart';
 import 'package:kazumi/pages/info/rating_review_dialog.dart';
 import 'package:flutter/material.dart';
@@ -10,8 +9,9 @@ import 'package:kazumi/bean/widget/embedded_native_control_area.dart';
 import 'package:kazumi/services/storage/storage.dart';
 import 'package:kazumi/pages/info/info_controller.dart';
 import 'package:kazumi/bean/card/bangumi_info_card.dart';
-import 'package:kazumi/pages/info/source_sheet.dart';
+import 'package:kazumi/pages/video/video_playback_args.dart';
 import 'package:kazumi/plugins/plugins_controller.dart';
+import 'package:kazumi/services/plugin/plugin_search_service.dart';
 import 'package:kazumi/bean/card/network_img_layer.dart';
 import 'package:kazumi/services/logging/logger.dart';
 import 'package:kazumi/pages/info/info_tabview.dart';
@@ -19,6 +19,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:kazumi/modules/bangumi/bangumi_item.dart';
+import 'package:kazumi/modules/search/plugin_search_module.dart';
 import 'package:kazumi/bean/appbar/drag_to_move_bar.dart' as dtb;
 import 'package:kazumi/utils/device.dart';
 
@@ -52,7 +53,6 @@ class _InfoPageState extends State<InfoPage> with TickerProviderStateMixin {
 
   InfoController get infoController => widget.infoController;
   PluginsController get pluginsController => widget.pluginsController;
-  late TabController sourceTabController;
   late TabController infoTabController;
   late bool showRating;
 
@@ -67,6 +67,11 @@ class _InfoPageState extends State<InfoPage> with TickerProviderStateMixin {
   bool staffIsEmpty = false;
   bool _showBangumiInfoSkeleton = false;
   int _fabTabIndex = 0;
+
+  /// Kicked off as soon as the page opens so 开始观看 can jump straight into
+  /// the player with search results already in hand, instead of waiting for
+  /// the source sheet to be opened before searching.
+  PluginSearchService? _pluginSearchService;
 
   BangumiItem get inputBangumiIten => widget.inputBangumiItem;
 
@@ -226,14 +231,20 @@ class _InfoPageState extends State<InfoPage> with TickerProviderStateMixin {
         enforceMinimumLoadingDuration: true,
       );
     }
-    sourceTabController =
-        TabController(length: pluginsController.pluginList.length, vsync: this);
     infoTabController = TabController(length: _infoTabs.length, vsync: this);
     _fabTabIndex = infoTabController.index;
     showRating = GStorage.getSetting(SettingsKeys.showRating);
     infoTabController.addListener(onInfoTabChanged);
     infoTabController.addListener(_syncFabTabIndex);
     infoTabController.animation?.addListener(_syncFabTabIndex);
+    _pluginSearchService = PluginSearchService(
+      infoController: infoController,
+      pluginsController: pluginsController,
+    );
+    final keyword = infoController.bangumiItem.nameCn == ''
+        ? infoController.bangumiItem.name
+        : infoController.bangumiItem.nameCn;
+    _pluginSearchService?.queryAllSource(keyword);
   }
 
   void onInfoTabChanged() {
@@ -304,8 +315,9 @@ class _InfoPageState extends State<InfoPage> with TickerProviderStateMixin {
     infoController.staffList.clear();
     infoController.clearRelations();
     infoController.pluginSearchResponseList.clear();
-    sourceTabController.dispose();
     infoTabController.dispose();
+    _pluginSearchService?.cancel();
+    _pluginSearchService = null;
     super.dispose();
   }
 
@@ -513,15 +525,18 @@ class _InfoPageState extends State<InfoPage> with TickerProviderStateMixin {
               : FloatingActionButton.extended(
                   tooltip: '开始观看',
                   onPressed: () {
-                    showAdaptiveBottomSheet<void>(
-                      backgroundColor:
-                          Theme.of(context).scaffoldBackgroundColor,
-                      context: context,
-                      builder: (context) {
-                        return SourceSheet(
-                            tabController: sourceTabController,
-                            infoController: infoController);
-                      },
+                    // Reuses whatever the search kicked off in initState has
+                    // gathered so far; the player races the results itself
+                    // and 手动选择 (in the 片源 dropdown) still reaches the
+                    // full source sheet if auto-selection picks wrong.
+                    context.pushNamed(
+                      '/video/',
+                      arguments: AutoVideoPlaybackArgs(
+                        bangumiItem: infoController.bangumiItem,
+                        searchResults: List<PluginSearchResponse>.of(
+                          infoController.pluginSearchResponseList,
+                        ),
+                      ),
                     );
                   },
                   label: const Text('开始观看'),

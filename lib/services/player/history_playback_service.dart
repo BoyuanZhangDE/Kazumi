@@ -1,5 +1,6 @@
 import 'package:kazumi/modules/download/download_module.dart';
 import 'package:kazumi/modules/history/history_module.dart';
+import 'package:kazumi/modules/search/plugin_search_module.dart';
 import 'package:kazumi/pages/download/download_controller.dart';
 import 'package:kazumi/pages/video/video_playback_args.dart';
 import 'package:kazumi/plugins/plugins.dart';
@@ -58,40 +59,75 @@ class HistoryPlaybackService {
     History history,
     RuleCancelToken? cancelToken,
   ) async {
-    if (history.lastSrc.isEmpty) {
-      return null;
-    }
-    Plugin? targetPlugin;
-    for (final plugin in _pluginsController.pluginList) {
-      if (plugin.name == history.adapterName) {
-        targetPlugin = plugin;
-        break;
+    if (history.lastSrc.isNotEmpty) {
+      Plugin? targetPlugin;
+      for (final plugin in _pluginsController.pluginList) {
+        if (plugin.name == history.adapterName) {
+          targetPlugin = plugin;
+          break;
+        }
+      }
+      if (targetPlugin != null) {
+        try {
+          final roads = await targetPlugin.queryChapterRoads(
+            history.lastSrc,
+            cancelToken: cancelToken,
+          );
+          if (roads.isNotEmpty) {
+            return OnlineVideoPlaybackArgs(
+              bangumiItem: history.bangumiItem,
+              plugin: targetPlugin,
+              title: history.bangumiItem.nameCn.isEmpty
+                  ? history.bangumiItem.name
+                  : history.bangumiItem.nameCn,
+              src: history.lastSrc,
+              roads: roads,
+              // A remembered source, not a choice the user just made — leave
+              // it eligible for automatic recovery if the resolve fails.
+              isManualPick: false,
+            );
+          }
+        } catch (_) {
+          KazumiLogger().w("QueryManager: failed to query roads");
+        }
       }
     }
-    if (targetPlugin == null) {
-      return null;
-    }
-    try {
-      final roads = await targetPlugin.queryChapterRoads(
-        history.lastSrc,
-        cancelToken: cancelToken,
-      );
-      if (roads.isEmpty) {
-        return null;
+    // The remembered source is gone, renamed, or stopped returning chapters.
+    // Fall through to the same probe used from a cold start instead of
+    // dead-ending on this one source.
+    return _autoArgs(history, cancelToken);
+  }
+
+  /// Re-searches every plugin for this show so the caller can race them
+  /// through the automatic playable-source probe, the same as opening the
+  /// show from the info page fresh.
+  Future<VideoPlaybackArgs?> _autoArgs(
+    History history,
+    RuleCancelToken? cancelToken,
+  ) async {
+    final keyword = history.bangumiItem.nameCn.isEmpty
+        ? history.bangumiItem.name
+        : history.bangumiItem.nameCn;
+    final results = <PluginSearchResponse>[];
+    await Future.wait(_pluginsController.pluginList.map((plugin) async {
+      try {
+        final result =
+            await plugin.queryBangumi(keyword, cancelToken: cancelToken);
+        if (result.data.isNotEmpty) {
+          results.add(result);
+        }
+      } catch (_) {
+        // Best-effort fallback probe; one plugin failing shouldn't block
+        // the others from being tried.
       }
-      return OnlineVideoPlaybackArgs(
-        bangumiItem: history.bangumiItem,
-        plugin: targetPlugin,
-        title: history.bangumiItem.nameCn.isEmpty
-            ? history.bangumiItem.name
-            : history.bangumiItem.nameCn,
-        src: history.lastSrc,
-        roads: roads,
-      );
-    } catch (_) {
-      KazumiLogger().w("QueryManager: failed to query roads");
+    }));
+    if (results.isEmpty) {
       return null;
     }
+    return AutoVideoPlaybackArgs(
+      bangumiItem: history.bangumiItem,
+      searchResults: results,
+    );
   }
 
   VideoPlaybackArgs? _offlineArgs(History history) {

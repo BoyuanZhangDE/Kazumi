@@ -1,0 +1,24 @@
+# Kazumi's live-network verification cases (see test/live/) are tagged
+# `live` and must never run as part of a plain `flutter test` -- they hit
+# real third-party scraper sites and would make CI flaky and rude.
+#
+# `skip` here makes `flutter test` show them as skipped (not run, zero
+# network calls) without changing the count of genuinely passing tests.
+#
+# Dart's test runner tag filters (`include_tags`/`exclude_tags`) are ANDed
+# with whatever `--tags`/`--exclude-tags` is passed on the command line, so
+# a file-level `exclude_tags: live` here would make the `live` suite
+# unreachable from the CLI *forever*, even via `--tags live` -- there would
+# be no way to ever run it short of editing this file. `skip` avoids that:
+# the officially supported way to opt back in is `--run-skipped`.
+#
+# Default (safe):
+#   flutter test
+#
+# Opt in to the live cases:
+#   flutter test --tags live --run-skipped
+tags:
+  live:
+    skip: >-
+      Live network test -- hits real third-party scraper sites. Opt in with:
+      flutter test --tags live --run-skipped

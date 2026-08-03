@@ -221,6 +221,110 @@ mixin _$VideoPageController on _VideoPageController, Store {
     });
   }
 
+  late final _$availableSourceNamesAtom =
+      Atom(name: '_VideoPageController.availableSourceNames', context: context);
+
+  @override
+  ObservableList<String> get availableSourceNames {
+    _$availableSourceNamesAtom.reportRead();
+    return super.availableSourceNames;
+  }
+
+  @override
+  set availableSourceNames(ObservableList<String> value) {
+    _$availableSourceNamesAtom.reportWrite(value, super.availableSourceNames,
+        () {
+      super.availableSourceNames = value;
+    });
+  }
+
+  late final _$probeCandidateOrderAtom =
+      Atom(name: '_VideoPageController.probeCandidateOrder', context: context);
+
+  @override
+  ObservableList<String> get probeCandidateOrder {
+    _$probeCandidateOrderAtom.reportRead();
+    return super.probeCandidateOrder;
+  }
+
+  @override
+  set probeCandidateOrder(ObservableList<String> value) {
+    _$probeCandidateOrderAtom.reportWrite(value, super.probeCandidateOrder, () {
+      super.probeCandidateOrder = value;
+    });
+  }
+
+  late final _$probeCompletedOrderAtom =
+      Atom(name: '_VideoPageController.probeCompletedOrder', context: context);
+
+  @override
+  ObservableList<String> get probeCompletedOrder {
+    _$probeCompletedOrderAtom.reportRead();
+    return super.probeCompletedOrder;
+  }
+
+  @override
+  set probeCompletedOrder(ObservableList<String> value) {
+    _$probeCompletedOrderAtom.reportWrite(value, super.probeCompletedOrder, () {
+      super.probeCompletedOrder = value;
+    });
+  }
+
+  late final _$_probeProgressAtom =
+      Atom(name: '_VideoPageController._probeProgress', context: context);
+
+  ProbeProgress? get probeProgress {
+    _$_probeProgressAtom.reportRead();
+    return super._probeProgress;
+  }
+
+  @override
+  ProbeProgress? get _probeProgress => probeProgress;
+
+  @override
+  set _probeProgress(ProbeProgress? value) {
+    _$_probeProgressAtom.reportWrite(value, super._probeProgress, () {
+      super._probeProgress = value;
+    });
+  }
+
+  late final _$_showSourceSelectionPanelAtom = Atom(
+      name: '_VideoPageController._showSourceSelectionPanel', context: context);
+
+  bool get showSourceSelectionPanel {
+    _$_showSourceSelectionPanelAtom.reportRead();
+    return super._showSourceSelectionPanel;
+  }
+
+  @override
+  bool get _showSourceSelectionPanel => showSourceSelectionPanel;
+
+  @override
+  set _showSourceSelectionPanel(bool value) {
+    _$_showSourceSelectionPanelAtom
+        .reportWrite(value, super._showSourceSelectionPanel, () {
+      super._showSourceSelectionPanel = value;
+    });
+  }
+
+  late final _$_probeExhaustedAtom =
+      Atom(name: '_VideoPageController._probeExhausted', context: context);
+
+  bool get probeExhausted {
+    _$_probeExhaustedAtom.reportRead();
+    return super._probeExhausted;
+  }
+
+  @override
+  bool get _probeExhausted => probeExhausted;
+
+  @override
+  set _probeExhausted(bool value) {
+    _$_probeExhaustedAtom.reportWrite(value, super._probeExhausted, () {
+      super._probeExhausted = value;
+    });
+  }
+
   late final _$_VideoPageControllerActionController =
       ActionController(name: '_VideoPageController', context: context);
 
@@ -312,6 +416,72 @@ mixin _$VideoPageController on _VideoPageController, Store {
   }
 
   @override
+  void _setProbeProgress(ProbeProgress? progress) {
+    final _$actionInfo = _$_VideoPageControllerActionController.startAction(
+        name: '_VideoPageController._setProbeProgress');
+    try {
+      return super._setProbeProgress(progress);
+    } finally {
+      _$_VideoPageControllerActionController.endAction(_$actionInfo);
+    }
+  }
+
+  @override
+  void _setShowSourceSelectionPanel(bool value) {
+    final _$actionInfo = _$_VideoPageControllerActionController.startAction(
+        name: '_VideoPageController._setShowSourceSelectionPanel');
+    try {
+      return super._setShowSourceSelectionPanel(value);
+    } finally {
+      _$_VideoPageControllerActionController.endAction(_$actionInfo);
+    }
+  }
+
+  @override
+  void _beginAutoSelection() {
+    final _$actionInfo = _$_VideoPageControllerActionController.startAction(
+        name: '_VideoPageController._beginAutoSelection');
+    try {
+      return super._beginAutoSelection();
+    } finally {
+      _$_VideoPageControllerActionController.endAction(_$actionInfo);
+    }
+  }
+
+  @override
+  void _setProbeCandidateOrder(List<String> names) {
+    final _$actionInfo = _$_VideoPageControllerActionController.startAction(
+        name: '_VideoPageController._setProbeCandidateOrder');
+    try {
+      return super._setProbeCandidateOrder(names);
+    } finally {
+      _$_VideoPageControllerActionController.endAction(_$actionInfo);
+    }
+  }
+
+  @override
+  void _failAutoSelection(String message) {
+    final _$actionInfo = _$_VideoPageControllerActionController.startAction(
+        name: '_VideoPageController._failAutoSelection');
+    try {
+      return super._failAutoSelection(message);
+    } finally {
+      _$_VideoPageControllerActionController.endAction(_$actionInfo);
+    }
+  }
+
+  @override
+  void _applyDisplaySource(String pluginName, EpisodeTarget target) {
+    final _$actionInfo = _$_VideoPageControllerActionController.startAction(
+        name: '_VideoPageController._applyDisplaySource');
+    try {
+      return super._applyDisplaySource(pluginName, target);
+    } finally {
+      _$_VideoPageControllerActionController.endAction(_$actionInfo);
+    }
+  }
+
+  @override
   void _applyEpisodeComments(
       int episode, EpisodeInfo info, List<EpisodeCommentItem> comments) {
     final _$actionInfo = _$_VideoPageControllerActionController.startAction(
@@ -347,7 +517,10 @@ isPip: ${isPip},
 showTabBody: ${showTabBody},
 historyOffset: ${historyOffset},
 isOfflineMode: ${isOfflineMode},
-roadList: ${roadList}
+roadList: ${roadList},
+availableSourceNames: ${availableSourceNames},
+probeCandidateOrder: ${probeCandidateOrder},
+probeCompletedOrder: ${probeCompletedOrder}
     ''';
   }
 }

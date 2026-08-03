@@ -7,8 +7,13 @@ import 'package:kazumi/pages/video/video_controller.dart';
 import 'package:kazumi/pages/video/danmaku_send_sheet.dart';
 import 'package:kazumi/pages/video/video_playback_args.dart';
 import 'package:kazumi/pages/history/history_controller.dart';
+import 'package:kazumi/pages/collect/collect_controller.dart';
+import 'package:kazumi/pages/info/info_controller.dart';
+import 'package:kazumi/pages/info/source_sheet.dart';
+import 'package:kazumi/plugins/plugins_controller.dart';
 import 'package:kazumi/services/logging/logger.dart';
 import 'package:kazumi/pages/player/player_item.dart';
+import 'package:kazumi/bean/widget/error_widget.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:kazumi/services/storage/storage.dart';
 import 'package:kazumi/services/player/pip_utils.dart';
@@ -127,6 +132,8 @@ class _VideoPageState extends State<VideoPage>
   void _initializePlayback() {
     if (videoPageController.isOfflineMode) {
       _initOfflineMode(playerController);
+    } else if (widget.args is AutoVideoPlaybackArgs) {
+      _initAutoMode(playerController);
     } else {
       _initOnlineMode(playerController);
     }
@@ -172,6 +179,34 @@ class _VideoPageState extends State<VideoPage>
         currentRoad: videoPageController.selectedEpisode.road,
         offset: videoPageController.historyOffset,
       );
+    });
+  }
+
+  void _initAutoMode(PlayerController playerController) {
+    videoPageController.historyOffset = 0;
+    _showTabBodyImmediately(locateEpisode: false);
+
+    _logSubscription = videoPageController.logStream.listen((log) {
+      if (mounted) {
+        setState(() {
+          webviewLogLines.add(log);
+          if (webviewLogLines.length > 100) {
+            webviewLogLines.removeAt(0);
+          }
+        });
+      }
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await videoPageController.beginAutoSourceSelection(
+        playerController: playerController,
+      );
+      if (!mounted) return;
+      setState(() {
+        visibleRoad = videoPageController.selectedEpisode.road;
+      });
+      menuJumpToCurrentEpisode();
     });
   }
 
@@ -700,49 +735,67 @@ class _VideoPageState extends State<VideoPage>
               if (videoPageController.loading ||
                   playerLoading ||
                   videoPageController.errorMessage != null)
-                Container(
-                  color: Colors.black,
-                  child: Observer(builder: (context) {
-                    return Center(
-                      child: videoPageController.errorMessage != null
-                          ? Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.error_outline,
-                                    color: Theme.of(context).colorScheme.error,
-                                    size: 48),
-                                const SizedBox(height: 16),
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 32),
-                                  child: Text(
-                                    videoPageController.errorMessage!,
-                                    style: const TextStyle(
-                                        color: Colors.white, fontSize: 16),
-                                    textAlign: TextAlign.center,
-                                  ),
-                                ),
-                              ],
-                            )
-                          : Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                CircularProgressIndicator(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .tertiaryContainer),
-                                const SizedBox(height: 10),
-                                Text(
-                                  videoPageController.loading
-                                      ? '视频资源解析中'
-                                      : '视频资源解析成功, 播放器加载中',
-                                  style: const TextStyle(color: Colors.white),
-                                ),
-                              ],
-                            ),
-                    );
-                  }),
-                ),
+                Observer(builder: (context) {
+                  // Sources having run out is a dead end that still leaves
+                  // recovery options, not a plain error — give it a normal
+                  // (non-black) surface so GeneralErrorWidget's themed text
+                  // stays readable.
+                  final allSourcesFailed = videoPageController.loading ==
+                          false &&
+                      videoPageController.errorMessage != null &&
+                      videoPageController.probeExhausted;
+                  return Container(
+                    color: allSourcesFailed
+                        ? Theme.of(context).colorScheme.surface
+                        : Colors.black,
+                    child: Center(
+                      child: allSourcesFailed
+                          ? _buildAllSourcesFailedWidget(context)
+                          : videoPageController.errorMessage != null
+                              ? Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.error_outline,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .error,
+                                        size: 48),
+                                    const SizedBox(height: 16),
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 32),
+                                      child: Text(
+                                        videoPageController.errorMessage!,
+                                        style: const TextStyle(
+                                            color: Colors.white, fontSize: 16),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    ),
+                                  ],
+                                )
+                              : videoPageController.showSourceSelectionPanel
+                                  ? _buildSourceSelectionPanel(context)
+                                  : Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        CircularProgressIndicator(
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .tertiaryContainer),
+                                        const SizedBox(height: 10),
+                                        Text(
+                                          videoPageController.loading
+                                              ? '视频资源解析中'
+                                              : '视频资源解析成功, 播放器加载中',
+                                          style: const TextStyle(
+                                              color: Colors.white),
+                                        ),
+                                      ],
+                                    ),
+                    ),
+                  );
+                }),
               Visibility(
                 visible: (videoPageController.loading || playerLoading) &&
                     showDebugLog,
@@ -851,6 +904,196 @@ class _VideoPageState extends State<VideoPage>
     );
   }
 
+  /// Opens the full source sheet (別名検索/手動検索 included) against a
+  /// throwaway [InfoController] seeded with the current show, so 手动选择
+  /// stays reachable even after auto-selection has already picked a source.
+  void _openSourceSheet() {
+    final sheetInfoController = InfoController(inject<CollectController>())
+      ..bangumiItem = videoPageController.bangumiItem;
+    final sheetTabController = TabController(
+      length: inject<PluginsController>().pluginList.length,
+      vsync: this,
+    );
+    showAdaptiveBottomSheet<void>(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      context: context,
+      builder: (context) {
+        return SourceSheet(
+          tabController: sheetTabController,
+          infoController: sheetInfoController,
+        );
+      },
+    ).whenComplete(sheetTabController.dispose);
+  }
+
+  Widget get sourceMenuAnchor {
+    return Observer(builder: (context) {
+      final availableSources = videoPageController.availableSourceNames;
+      final currentSourceName = videoPageController.currentPlugin.name;
+      return MenuAnchor(
+        consumeOutsideTap: true,
+        builder: (_, MenuController controller, __) {
+          return SizedBox(
+            height: 34,
+            child: TextButton(
+              style: ButtonStyle(
+                padding: WidgetStateProperty.all(EdgeInsets.zero),
+              ),
+              onPressed: () {
+                if (controller.isOpen) {
+                  controller.close();
+                } else {
+                  controller.open();
+                }
+              },
+              child: Text(
+                currentSourceName.isEmpty ? '片源 ' : '$currentSourceName ',
+                style: const TextStyle(fontSize: 13),
+              ),
+            ),
+          );
+        },
+        menuChildren: [
+          for (final name in availableSources)
+            MenuItemButton(
+              onPressed: () {
+                videoPageController.switchToSource(
+                  name,
+                  playerController: playerController,
+                );
+              },
+              child: Container(
+                height: 48,
+                constraints: BoxConstraints(minWidth: 112),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    name,
+                    style: TextStyle(
+                      color: name == currentSourceName
+                          ? Theme.of(context).colorScheme.primary
+                          : null,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          MenuItemButton(
+            onPressed: _openSourceSheet,
+            child: Container(
+              height: 48,
+              constraints: BoxConstraints(minWidth: 112),
+              child: const Align(
+                alignment: Alignment.centerLeft,
+                child: Text('手动选择'),
+              ),
+            ),
+          ),
+        ],
+      );
+    });
+  }
+
+  /// Shown once [VideoPageController.showSourceSelectionPanel] flips true (a
+  /// 3s-into-the-race threshold set by the controller, so a fast race never
+  /// flashes it). Status dots reuse the pending/error colors from the
+  /// 选择播放源 sheet's tab dots — this panel only ever renders mid-race, so
+  /// a dot here is either "not checked yet" or "checked, didn't pan out";
+  /// the eventual winner is revealed by the panel disappearing.
+  Widget _buildSourceSelectionPanel(BuildContext context) {
+    final progress = videoPageController.probeProgress;
+    final total = progress?.total ?? videoPageController.probeCandidateOrder.length;
+    final completed = progress?.completed ?? 0;
+    final completedNames = videoPageController.probeCompletedOrder;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text(
+            '正在为你选择可用片源',
+            style: TextStyle(color: Colors.white, fontSize: 16),
+          ),
+          const SizedBox(height: 16),
+          LinearProgressIndicator(
+            value: total > 0 ? completed / total : null,
+            color: Theme.of(context).colorScheme.tertiaryContainer,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '已检查 $completed/$total 个片源',
+            style: const TextStyle(color: Colors.white70, fontSize: 12),
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final name in videoPageController.probeCandidateOrder)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: completedNames.contains(name)
+                            ? Colors.red
+                            : Colors.grey,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                    Text(name,
+                        style:
+                            const TextStyle(color: Colors.white, fontSize: 12)),
+                  ],
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Every candidate the auto-probe raced failed both gates. Unlike the
+  /// generic 视频解析超时 message this always offers a way out: another
+  /// 播放线路, the full source sheet, or a different episode.
+  Widget _buildAllSourcesFailedWidget(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: GeneralErrorWidget(
+        errMsg: '该集数暂时没有可用片源，可能还未收录',
+        actions: [
+          GeneralErrorButton(
+            onPressed: () {
+              final roadCount = videoPageController.roadList.length;
+              if (roadCount == 0) return;
+              final nextRoad = (visibleRoad + 1) % roadCount;
+              setState(() {
+                visibleRoad = nextRoad;
+              });
+              changeEpisode(
+                videoPageController.selectedEpisode.episode,
+                currentRoad: nextRoad,
+              );
+            },
+            text: '换一条播放线路',
+          ),
+          GeneralErrorButton(
+            onPressed: _openSourceSheet,
+            text: '手动选择片源',
+          ),
+          GeneralErrorButton(
+            onPressed: () => _showTabBodyImmediately(),
+            text: '选择其他分集',
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget get menuBar {
     return Padding(
       padding: const EdgeInsets.all(8),
@@ -868,6 +1111,8 @@ class _VideoPageState extends State<VideoPage>
               ),
             ),
           ),
+          const SizedBox(width: 10),
+          sourceMenuAnchor,
           const SizedBox(width: 10),
           MenuAnchor(
             consumeOutsideTap: true,

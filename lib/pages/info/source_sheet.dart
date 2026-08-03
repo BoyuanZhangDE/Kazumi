@@ -622,6 +622,7 @@ class _SourceSheetState extends State<SourceSheet>
                                           title: searchItem.name,
                                           src: searchItem.src,
                                           roads: roads,
+                                          isManualPick: true,
                                         ),
                                       );
                                 } catch (_) {
