@@ -62,7 +62,8 @@ jobs:
     name: "Release for macOS (unsigned)"
     needs: [flutter-test, flutter-analyze]
     runs-on: macos-latest
-    permissions: write-all
+    permissions:
+      contents: read
     steps:
       - name: Clone repository
         uses: actions/checkout@v4
@@ -106,16 +107,17 @@ jobs:
     name: "Release for Windows (unsigned)"
     needs: [flutter-test, flutter-analyze]
     runs-on: windows-latest
-    permissions: write-all
+    permissions:
+      contents: read
     steps:
       - name: Clone repository
         uses: actions/checkout@v4
       - name: Extract tag name
         run: |
-          if ("${{ github.ref }}".StartsWith("refs/tags/")) {
-            $tag = "${{ github.ref }}".Replace('refs/tags/', '')
+          if ($env:GITHUB_REF.StartsWith("refs/tags/")) {
+            $tag = $env:GITHUB_REF.Replace('refs/tags/', '')
           } else {
-            $tag = "manual-${{ github.run_id }}"
+            $tag = "manual-${env:GITHUB_RUN_ID}"
           }
           $tagSafe = $tag.Replace('/', '-')
           echo "tag=$tag" >> $env:GITHUB_ENV
@@ -151,7 +153,8 @@ jobs:
     name: "Release (desktop, unsigned)"
     needs: [build-macos, build-windows]
     runs-on: ubuntu-latest
-    permissions: write-all
+    permissions:
+      contents: write
     steps:
       - name: Clone repository
         uses: actions/checkout@v4
