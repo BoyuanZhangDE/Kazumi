@@ -4,8 +4,10 @@ import 'package:kazumi/utils/m3u8_parser.dart';
 class HttpProbeResponse {
   final int statusCode;
   final String body;
+  final String contentType;
 
-  const HttpProbeResponse({required this.statusCode, required this.body});
+  const HttpProbeResponse(
+      {required this.statusCode, required this.body, this.contentType = ''});
 }
 
 typedef HttpProbeGetFn = Future<HttpProbeResponse> Function(
@@ -23,11 +25,23 @@ class M3u8Validator {
     try {
       final response = await _get(videoUrl, headers);
 
-      if (!_isM3u8Url(videoUrl)) {
-        return response.statusCode == 200 || response.statusCode == 206;
+      final looksLikePlaylist =
+          _isM3u8Url(videoUrl) || response.body.startsWith('#EXTM3U');
+
+      // Non-playlist responses still need sniffing: the WebView resolver's
+      // DOM <video> scan can catch a poster/cover image (or an HTML error
+      // page) that happens to serve 200, and status alone would wave it in.
+      if (!looksLikePlaylist) {
+        if (response.statusCode != 200 && response.statusCode != 206) {
+          return false;
+        }
+        return _looksLikeMediaResponse(response);
       }
 
-      if (response.statusCode != 200 ||
+      // 206 is valid here too: the probe sends a Range header, so a
+      // Range-honoring server legitimately answers Partial Content for a
+      // complete-enough playlist rather than 200.
+      if ((response.statusCode != 200 && response.statusCode != 206) ||
           !response.body.startsWith('#EXTM3U')) {
         return false;
       }
@@ -55,5 +69,22 @@ class M3u8Validator {
   bool _isM3u8Url(String url) {
     final path = Uri.parse(url).path.toLowerCase();
     return path.endsWith('.m3u8');
+  }
+
+  bool _looksLikeMediaResponse(HttpProbeResponse response) {
+    final contentType =
+        response.contentType.toLowerCase().split(';').first.trim();
+    if (contentType.startsWith('image/') || contentType.startsWith('text/')) {
+      return false;
+    }
+
+    final body = response.body.trim().toLowerCase();
+    if (body.startsWith('<!doctype') ||
+        body.startsWith('<html') ||
+        body.startsWith('gif8')) {
+      return false;
+    }
+
+    return true;
   }
 }
