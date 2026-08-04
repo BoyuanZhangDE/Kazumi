@@ -1,6 +1,9 @@
 class ApiEndpoints {
   /// 当前版本
-  static const String version = '2.2.6';
+  // Must track the release tag (autosource/v<version>). The updater compares
+  // this against this fork's own GitHub releases, so leaving it behind the tag
+  // makes every build report an update to itself.
+  static const String version = '2.2.6.4';
 
   /// 规则API级别
   static const int apiLevel = 8;
@@ -24,14 +27,7 @@ class ApiEndpoints {
 
   /// 在线升级
   static const String latestApp =
-      'https://api.github.com/repos/Predidit/Kazumi/releases/latest';
-
-  /// Bangumi 镜像测试后端
-  static const String bangumiMirrorDomain = 'https://api.kazumi.fyi';
-
-  /// Kazumi 镜像后端应用更新
-  static const String latestAppMirror =
-      '$bangumiMirrorDomain/kazumi/v1/app/latest';
+      'https://api.github.com/repos/BoyuanZhangDE/Kazumi/releases/latest';
 
   /// 弹弹官网
   static const String dandanIndex = 'https://www.dandanplay.com/';
@@ -82,14 +78,6 @@ class ApiEndpoints {
 
   /// 番剧趋势
   static const String bangumiTrendsNext = '/p1/trending/subjects';
-
-  /// Kazumi Bangumi 镜像缓存榜单
-  static const String bangumiMirrorPopularSubjects =
-      '/kazumi/v1/popular/subjects';
-
-  /// Kazumi Bangumi 镜像季节时间表
-  static const String bangumiMirrorSeasonCalendar =
-      '/kazumi/v1/calendar/season';
 
   /// 番剧信息
   static const String bangumiInfoByIDNext = '/p1/subjects/{0}';

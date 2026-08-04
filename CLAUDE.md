@@ -20,6 +20,45 @@ Forgetting the prefix produces `command not found` and, historically, whole
 rounds of work shipped unverified. CocoaPods (required for macOS builds) is at
 `/opt/homebrew/bin/pod`.
 
+## Credentials
+
+**The only build-time secrets are `DANDANAPI_APPID` / `DANDANAPI_KEY`** (DanDanPlay,
+for 弹幕). They are set as repo secrets on `BoyuanZhangDE/Kazumi` and injected by
+`release-desktop.yaml` via `--dart-define`.
+
+**This fork does not use `KAZUMI_APPID` / `KAZUMI_KEY`, and must not reacquire
+them.** The `api.kazumi.fyi` mirror they authenticated was removed entirely on
+2026-08-04 — no mirror routing, no request signing, no mirror endpoints. All
+Bangumi traffic goes direct to `api.bgm.tv` / `next.bgm.tv`. If an upstream sync
+reintroduces `bangumi_mirror_credentials.dart`, `resolveBangumiMirrorPath`, or
+`shouldSignProtectedMirrorRequest`, drop them again rather than wiring up keys.
+
+**`BoyuanZhangDE/Kazumi` is a public repo — never commit a secret.** Local runs
+read them from a gitignored file:
+
+```bash
+cp dart_defines/example.json dart_defines/local.json   # then fill in the values
+flutter run -d macos --dart-define-from-file=dart_defines/local.json
+```
+
+`dart_defines/local.json` is gitignored; `dart_defines/example.json` (empty
+placeholders) is tracked. Anything reading credentials must go through
+`String.fromEnvironment` — never a literal in a tracked file, including tests.
+
+Empty creds are a *silent* failure mode: the build succeeds and 弹幕 just does
+nothing, because DanDanPlay answers `403 Missing Authentication Headers`. A plain
+`flutter test` has no creds compiled in, so it cannot catch a credential
+regression — `test/live/danmaku_live_test.dart` is what proves the chain works:
+
+```bash
+flutter test test/live/danmaku_live_test.dart --tags live --run-skipped \
+  --dart-define-from-file=dart_defines/local.json
+```
+
+The signing scheme is `base64(sha256(appId + timestamp + uri.path + secret))`,
+signing the **path only** — query strings are excluded. Verified live against
+search, bangumi, and comment endpoints on 2026-08-04.
+
 ## Architecture
 
 - **DI + routing:** `flutter_modular`. Page-scoped controllers are bound per
@@ -94,7 +133,7 @@ logic testable at all — follow it for anything new.
 ```bash
 export PATH="$HOME/develop/flutter/bin:$PATH"
 
-flutter test                                  # 183 pass + 1 skipped, zero network
+flutter test                                  # 218 pass + 2 skipped, zero network
 flutter test --tags live --run-skipped        # real scraper sites, opt-in
 flutter test integration_test/<file>.dart -d macos   # drives the real app
 ```
@@ -172,20 +211,6 @@ builds, `contents: write` only for the release job).
 
 ## Known issues / parked
 
-- **Danmaku is non-functional in fork builds.** `gh secret list` is empty, so
-  `DANDANAPI_*` and `KAZUMI_*` compile to empty strings via
-  `String.fromEnvironment` — the build succeeds silently and the feature just
-  doesn't work. A candidate DanDanPlay AppId was tested against the live API on
-  2026-08-03 and rejected with `X-Error-Message: Invalid AppId`; the request never
-  reached signature verification, so the paired secret remains unvalidated.
-  **Parked** pending a working AppId. The signing scheme itself is correct:
-  `base64(sha256(appId + timestamp + path + secret))`, verified independently.
-  Empty `KAZUMI_*` used to also break Bangumi search and the three comment
-  surfaces, since those requests get signed for the `api.kazumi.fyi` mirror
-  and empty credentials draw a 401. Unsigned builds now bypass the mirror
-  entirely (guard in `resolveBangumiMirrorPath` / `shouldSignProtectedMirrorRequest`
-  in `lib/request/core/dio_factory.dart` / `lib/request/clients/bangumi_client.dart`,
-  pinned by `test/bangumi_mirror_guard_test.dart`).
 - Gate B of the source probe validates the *playlist*, not the *media*, so a
   mid-episode stall is not caught. See the design doc's "Honest limits".
 - `pickBestMatch` breaks ties by list order; Levenshtein cannot separate season

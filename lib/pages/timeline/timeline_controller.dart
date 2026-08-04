@@ -3,7 +3,6 @@ import 'package:kazumi/request/apis/bangumi_api.dart';
 import 'package:kazumi/utils/anime_season.dart';
 import 'package:kazumi/repositories/collect_repository.dart';
 import 'package:kazumi/modules/collect/collect_type.dart';
-import 'package:kazumi/services/storage/storage.dart';
 import 'package:mobx/mobx.dart';
 
 part 'timeline_controller.g.dart';
@@ -46,9 +45,6 @@ abstract class _TimelineController with Store {
   late DateTime _selectedDate;
   DateTime get selectedDate => _selectedDate;
 
-  bool get _bangumiMirrorEnabled =>
-      GStorage.getSetting(SettingsKeys.enableBangumiProxy);
-
   void init() {
     _selectedDate = DateTime.now();
     seasonString = AnimeSeason(_selectedDate).toString();
@@ -72,23 +68,6 @@ abstract class _TimelineController with Store {
 
   @action
   Future<void> getSchedulesBySeason() async {
-    if (_bangumiMirrorEnabled) {
-      isLoading = true;
-      isTimeOut = false;
-      bangumiCalendar.clear();
-      final resBangumiCalendar =
-          await BangumiApi.getBangumiMirrorSeasonCalendar(
-              AnimeSeason(selectedDate).toSeasonStartAndEnd());
-      bangumiCalendar.clear();
-      bangumiCalendar.addAll(resBangumiCalendar);
-      isLoading = false;
-      isTimeOut = bangumiCalendar.every((innerList) => innerList.isEmpty);
-      if (!isTimeOut) {
-        changeSortType(sortType);
-      }
-      return;
-    }
-
     isLoading = true;
     isTimeOut = false;
     bangumiCalendar.clear();

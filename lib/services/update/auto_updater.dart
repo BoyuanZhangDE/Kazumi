@@ -190,7 +190,7 @@ class AutoUpdater {
   }
 
   Future<Map<String, dynamic>> _latestRelease() async {
-    final raw = await _downloadClient.getPlain(ApiEndpoints.latestAppMirror);
+    final raw = await _downloadClient.getPlain(ApiEndpoints.latestApp);
     final data = json.decode(raw);
     if (data is! Map) {
       throw Exception('Invalid update response');

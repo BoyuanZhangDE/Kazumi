@@ -1,12 +1,8 @@
-import 'dart:convert';
-
 import 'package:dio/dio.dart';
 import 'package:kazumi/request/core/dio_factory.dart';
 import 'package:kazumi/request/core/network_error_mapper.dart';
 import 'package:kazumi/utils/constants.dart';
 import 'package:kazumi/services/storage/storage.dart';
-import 'package:kazumi/utils/bangumi_mirror_credentials.dart';
-import 'package:kazumi/utils/crypto.dart';
 
 class BangumiClient {
   BangumiClient._();
@@ -79,49 +75,6 @@ class BangumiClient {
     if ((requiresAuth || bangumiSyncEnable) && token.isNotEmpty) {
       headers['Authorization'] = 'Bearer $token';
     }
-    if (shouldSignProtectedMirrorRequest(
-      url: url,
-      method: method,
-      proxyEnabled: GStorage.getSetting(SettingsKeys.enableBangumiProxy),
-      mirrorAppId: bangumiMirrorCredentials['id']!,
-    )) {
-      final timestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-      final body = data == null ? '' : jsonEncode(data);
-      headers['X-AppId'] = bangumiMirrorCredentials['id'];
-      headers['X-Timestamp'] = timestamp;
-      headers['X-Signature'] = generateBangumiMirrorSearchSignature(
-        method: method,
-        path: Uri.parse(url!).path,
-        body: body,
-        timestamp: timestamp,
-      );
-    }
     return headers;
   }
-}
-
-/// Whether a request must carry the mirror signature headers. Unsigned builds
-/// (empty [mirrorAppId]) never sign: their requests are not mirrored at all.
-bool shouldSignProtectedMirrorRequest({
-  required String? url,
-  required String method,
-  required bool proxyEnabled,
-  required String mirrorAppId,
-}) {
-  if (url == null) {
-    return false;
-  }
-  if (!proxyEnabled || mirrorAppId.isEmpty) {
-    return false;
-  }
-  final path = Uri.parse(url).path;
-  if (method == 'POST' && path == '/v0/search/subjects') {
-    return true;
-  }
-  if (method != 'GET') {
-    return false;
-  }
-  return path.startsWith('/p1/subjects/') && path.endsWith('/comments') ||
-      path.startsWith('/p1/episodes/') && path.endsWith('/comments') ||
-      path.startsWith('/p1/characters/') && path.endsWith('/comments');
 }

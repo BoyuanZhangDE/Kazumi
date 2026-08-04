@@ -41,8 +41,8 @@ class _MirrorSettingsStepState extends State<MirrorSettingsStep> {
             children: [
               SwitchListTile(
                 secondary: const Icon(Icons.travel_explore_rounded),
-                title: const Text('Bangumi 镜像'),
-                subtitle: const Text('加速热门与时间表加载'),
+                title: const Text('图片代理'),
+                subtitle: const Text('加速封面与头像加载'),
                 value: enableBangumiProxy,
                 onChanged: (value) async {
                   enableBangumiProxy = value;

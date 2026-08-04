@@ -225,9 +225,9 @@ actually failed; a record naming a different plugin is still a useful hint.
   tied at 0.556. Acceptable while 手动选择 stays prominent.
 - The 3s panel threshold and concurrency 3 are untuned guesses that measured fine
   on desktop. Mobile validation is explicitly out of scope for this fork.
-- **Parked:** danmaku is non-functional in fork builds — no `DANDANAPI_*` secrets
-  are configured, and a candidate AppId was rejected live with `Invalid AppId`
-  (2026-08-03). Unrelated to this feature; see `CLAUDE.md`.
+- ~~**Parked:** danmaku is non-functional in fork builds.~~ Resolved 2026-08-04:
+  working `DANDANAPI_*` credentials were verified live and configured as repo
+  secrets. Unrelated to this feature; see `CLAUDE.md`.
 
 ## Status: shipped
 

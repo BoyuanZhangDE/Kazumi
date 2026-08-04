@@ -1,8 +1,8 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_modular/flutter_modular.dart';
-import 'package:kazumi/bean/widget/bangumi_mirror_error_widget.dart';
 import 'package:kazumi/bean/widget/custom_dropdown_menu.dart';
+import 'package:kazumi/bean/widget/error_widget.dart';
 import 'package:kazumi/modules/bangumi/bangumi_item.dart';
 import 'package:kazumi/pages/popular/popular_controller.dart';
 import 'package:kazumi/bean/card/bangumi_card.dart';
@@ -97,19 +97,20 @@ class _PopularPageState extends State<PopularPage> {
                   return SliverToBoxAdapter(
                     child: SizedBox(
                       height: 400,
-                      child: BangumiMirrorErrorWidget(
-                        onRetry: () {
-                          if (popularController.trendList.isEmpty) {
-                            popularController.queryBangumiByTrend();
-                          } else {
-                            popularController.queryBangumiByTag();
-                          }
-                        },
-                        onSettingsReturned: () {
-                          if (mounted) {
-                            setState(() {});
-                          }
-                        },
+                      child: GeneralErrorWidget(
+                        errMsg: '啊咧（⊙.⊙） 无法加载数据',
+                        actions: [
+                          GeneralErrorButton(
+                            onPressed: () {
+                              if (popularController.trendList.isEmpty) {
+                                popularController.queryBangumiByTrend();
+                              } else {
+                                popularController.queryBangumiByTag();
+                              }
+                            },
+                            text: '点击重试',
+                          ),
+                        ],
                       ),
                     ),
                   );

@@ -1,7 +1,6 @@
 import 'dart:math';
 import 'package:kazumi/request/apis/bangumi_api.dart';
 import 'package:kazumi/modules/bangumi/bangumi_item.dart';
-import 'package:kazumi/services/storage/storage.dart';
 import 'package:mobx/mobx.dart';
 
 part 'popular_controller.g.dart';
@@ -30,9 +29,6 @@ abstract class _PopularController with Store {
   @observable
   bool isTimeOut = false;
 
-  bool get _bangumiMirrorEnabled =>
-      GStorage.getSetting(SettingsKeys.enableBangumiProxy);
-
   void setCurrentTag(String s) {
     currentTag = s;
   }
@@ -50,15 +46,10 @@ abstract class _PopularController with Store {
       _trendOffset = 0;
     }
     isLoadingMore = true;
-    final result = _bangumiMirrorEnabled
-        ? await BangumiApi.getBangumiMirrorPopularSubjects(
-            limit: _trendPageSize,
-            offset: _trendOffset,
-          )
-        : await BangumiApi.getBangumiTrendsList(
-            limit: _trendPageSize,
-            offset: _trendOffset,
-          );
+    final result = await BangumiApi.getBangumiTrendsList(
+      limit: _trendPageSize,
+      offset: _trendOffset,
+    );
     if (result.isNotEmpty) {
       _trendOffset += _trendPageSize;
     }
@@ -75,15 +66,10 @@ abstract class _PopularController with Store {
     }
     isLoadingMore = true;
     var tag = currentTag;
-    var result = _bangumiMirrorEnabled
-        ? await BangumiApi.getBangumiMirrorPopularSubjects(
-            tag: tag,
-            offset: bangumiList.length,
-          )
-        : await BangumiApi.getBangumiList(
-            rank: Random().nextInt(8000) + 1,
-            tag: tag,
-          );
+    var result = await BangumiApi.getBangumiList(
+      rank: Random().nextInt(8000) + 1,
+      tag: tag,
+    );
     bangumiList.addAll(result);
     isLoadingMore = false;
     isTimeOut = bangumiList.isEmpty;

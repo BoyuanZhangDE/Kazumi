@@ -54,3 +54,7 @@ android/build/reports/problems/
 **/macos/Pods/
 **/ios/Podfile.lock
 **/macos/Podfile.lock
+
+# Local dart-define credentials (real secrets) -- never commit.
+# See dart_defines/example.json for the tracked template.
+dart_defines/local.json

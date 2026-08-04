@@ -1,20 +1,13 @@
 // Drives the REAL Kazumi macOS app (compiled build, real network, real
-// WebViews) to get LIVE proof of a just-fixed bug: fork builds compile with
-// an empty KAZUMI_APPID (String.fromEnvironment with no --dart-define), and
-// the Bangumi mirror rewrite used to unconditionally send search traffic to
-// api.kazumi.fyi, which 401'd with no AppId. The fix (see
-// lib/request/core/dio_factory.dart's resolveBangumiMirrorPath) now returns
-// null -- i.e. "don't mirror" -- whenever mirrorAppId is empty, so requests
-// fall through to direct api.bgm.tv instead. Unit tests already cover the
-// pure function; this test proves the guard actually fires inside the fully
-// assembled app and that search results keep flowing end to end.
+// WebViews) to get LIVE proof that search works end to end against direct
+// api.bgm.tv traffic.
 //
 // Two stages:
-//   Stage S (search)  -- HARD assertions. This is what verifies the fix:
-//                         searching a real, very recently aired show
+//   Stage S (search)  -- HARD assertions. This is what verifies search
+//                         works: searching a real, very recently aired show
 //                         (尼古喵喵, bgm.tv subject 622206, July 2026) must
-//                         return it. An empty result here means the guard
-//                         does not work in the assembled app -- api.bgm.tv
+//                         return it. An empty result here means search is
+//                         broken in the assembled app -- api.bgm.tv
 //                         was confirmed reachable from this machine minutes
 //                         before this test was written.
 //   Stage P (play)     -- our own invariants are hard (bounded termination,
@@ -50,7 +43,6 @@ import 'package:kazumi/pages/player/player_controller.dart';
 import 'package:kazumi/pages/search/search_controller.dart';
 import 'package:kazumi/pages/search/search_page.dart';
 import 'package:kazumi/pages/video/video_controller.dart';
-import 'package:kazumi/services/storage/storage.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
@@ -70,7 +62,7 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets(
-    'search (live api.bgm.tv via mirror-guard fix) then play the result',
+    'search (live api.bgm.tv) then play the result',
     (tester) async {
       final tempDir =
           await Directory.systemTemp.createTemp('kazumi_integration_test_');
@@ -135,34 +127,6 @@ void main() {
 
       final searchPageController =
           tester.element(find.byType(SearchPage)).read<SearchPageController>();
-
-      // ---- Preconditions: this run must actually reproduce the
-      // previously-broken fork configuration, or a pass here proves
-      // nothing. ----
-      const kazumiAppId = String.fromEnvironment('KAZUMI_APPID');
-      print('[S] Precondition: KAZUMI_APPID (compiled in) is '
-          '${kazumiAppId.isEmpty ? "empty" : "non-empty"}.');
-      expect(
-        kazumiAppId,
-        isEmpty,
-        reason: 'This run must be built with an empty KAZUMI_APPID (the '
-            'fork\'s real, historically-broken configuration) or a passing '
-            'search result here would not actually exercise the mirror-guard '
-            'fix at all.',
-      );
-
-      final mirrorEnabled =
-          GStorage.getSetting(SettingsKeys.enableBangumiProxy);
-      print('[S] Precondition: enableBangumiProxy setting = $mirrorEnabled.');
-      expect(
-        mirrorEnabled,
-        isTrue,
-        reason: 'enableBangumiProxy defaults to true; if the isolated '
-            'storage somehow has it false, resolveBangumiMirrorPath would '
-            'short-circuit on proxyEnabled before ever reaching the '
-            'mirrorAppId.isEmpty guard this test exists to exercise, and a '
-            'passing search would not prove the fix works.',
-      );
 
       await searchPageController.searchBangumi(_targetNameCn, type: 'init');
       await tester.pump();

@@ -14,8 +14,6 @@ on:
 env:
   DANDANAPI_APPID: ${{ secrets.DANDANAPI_APPID }}
   DANDANAPI_KEY: ${{ secrets.DANDANAPI_KEY }}
-  KAZUMI_APPID: ${{ secrets.KAZUMI_APPID }}
-  KAZUMI_KEY: ${{ secrets.KAZUMI_KEY }}
 
 jobs:
   flutter-test:
@@ -88,8 +86,6 @@ jobs:
           flutter build macos --release
           --dart-define=DANDANAPI_APPID=$DANDANAPI_APPID
           --dart-define=DANDANAPI_KEY=$DANDANAPI_KEY
-          --dart-define=KAZUMI_APPID=$KAZUMI_APPID
-          --dart-define=KAZUMI_KEY=$KAZUMI_KEY
       - name: Create DMG
         run: |
           npm install --global create-dmg
@@ -146,8 +142,6 @@ jobs:
           flutter build windows
           --dart-define=DANDANAPI_APPID=$env:DANDANAPI_APPID
           --dart-define=DANDANAPI_KEY=$env:DANDANAPI_KEY
-          --dart-define=KAZUMI_APPID=$env:KAZUMI_APPID
-          --dart-define=KAZUMI_KEY=$env:KAZUMI_KEY
       - run: Compress-Archive build/windows/x64/runner/Release/* Kazumi_windows_${env:tag_safe}.zip
       - name: Upload Windows build
         uses: actions/upload-artifact@v4
@@ -201,9 +195,9 @@ jobs:
               after extracting the DMG.
             - **Windows**: SmartScreen will show an "unknown publisher" warning.
               Click "More info" then "Run anyway".
-            - If the `DANDANAPI_*` / `KAZUMI_*` secrets are not configured on this
-              repo, this build was compiled without danmaku/Kazumi API keys and those
-              features may not work.
+            - Danmaku requires the `DANDANAPI_APPID` / `DANDANAPI_KEY` secrets on
+              this repo. If they are unset, the build still succeeds but danmaku
+              silently does nothing.
           files: |
             macos_outputs/*.dmg
             windows_outputs/*.zip

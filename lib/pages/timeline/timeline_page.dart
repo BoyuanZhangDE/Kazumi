@@ -10,7 +10,7 @@ import 'package:kazumi/services/storage/storage.dart';
 import 'package:kazumi/bean/appbar/sys_app_bar.dart';
 import 'package:kazumi/utils/anime_season.dart';
 import 'package:kazumi/bean/dialog/dialog_helper.dart';
-import 'package:kazumi/bean/widget/bangumi_mirror_error_widget.dart';
+import 'package:kazumi/bean/widget/error_widget.dart';
 import 'package:kazumi/utils/device.dart';
 
 class TimelinePage extends StatefulWidget {
@@ -727,15 +727,16 @@ class _TimelinePageState extends State<TimelinePage>
           return Center(
             child: SizedBox(
               height: 400,
-              child: BangumiMirrorErrorWidget(
-                onRetry: () {
-                  onSeasonSelected(timelineController.selectedDate);
-                },
-                onSettingsReturned: () {
-                  if (mounted) {
-                    setState(() {});
-                  }
-                },
+              child: GeneralErrorWidget(
+                errMsg: '啊咧（⊙.⊙） 无法加载数据',
+                actions: [
+                  GeneralErrorButton(
+                    onPressed: () {
+                      onSeasonSelected(timelineController.selectedDate);
+                    },
+                    text: '点击重试',
+                  ),
+                ],
               ),
             ),
           );

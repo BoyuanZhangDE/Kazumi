@@ -109,8 +109,8 @@ class _PlayerSettingsPageState extends State<WebDavSettingsPage> {
                       setState(() {});
                     }
                   },
-                  title: Text('Bangumi 镜像'),
-                  description: Text('使用本地 Bangumi 缓存后端加载热门与分类榜单'),
+                  title: Text('图片代理'),
+                  description: Text('使用代理加速 Bangumi 封面与头像加载'),
                   initialValue: enableBangumiProxy,
                 ),
                 SettingsTile.switchTile(
