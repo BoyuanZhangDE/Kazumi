@@ -159,17 +159,50 @@ for sources that break weekly.
 - **Global-only success-rate ranking** — cheap, but the durable per-show fact is
   the matched `src`, which also skips stages 1–2 on re-open.
 
-## Open Questions
+## Resolved Questions
 
-- Which episode does the probe target when the user resumes from history at
-  episode *k* — episode 1, or *k*? Probing *k* proves more but the cached verdict
-  then binds to one episode.
-- Should a gate-B failure mark the source bad for the whole show, or only for that
-  episode?
-- `flutter` is not on PATH in the current shell; the test command needs
-  confirming before CI-style verification is possible.
+- **Which episode does the probe target on resume?** The one the user is actually
+  about to watch, not episode 1 — so a verdict is always earned on the real
+  target. The cache stays **per show**, not per episode: a per-episode cache is
+  coldest exactly where it is needed most (a newly aired episode has no prior
+  verdict by definition), and it would not fit the single-JSON-blob storage,
+  which is re-decoded on every `get()`.
+- **Should a gate-B failure blacklist the source?** No. Successes are scoped to
+  the show; failures are not persisted at all. Persisting negatives adds
+  staleness surface for no behavioural gain, since the race re-orders anyway.
+- **Toolchain.** `flutter` is at `~/develop/flutter/bin`, not on PATH. See
+  `CLAUDE.md`.
 
-## Status: implemented
+## Still Open
+
+- Mid-playback stalls are uncovered (gate B validates the playlist, not the
+  media). Cheapest mitigation is a 换个片源 action on the player's stall state,
+  since the probe machinery is already there.
+- `pickBestMatch` ties break by list order; live run showed three DM84 candidates
+  tied at 0.556. Acceptable while 手动选择 stays prominent.
+- The 3s panel threshold and concurrency 3 are untuned guesses that measured fine
+  on desktop. Mobile validation is explicitly out of scope for this fork.
+- **Parked:** danmaku is non-functional in fork builds — no `DANDANAPI_*` secrets
+  are configured, and a candidate AppId was rejected live with `Invalid AppId`
+  (2026-08-03). Unrelated to this feature; see `CLAUDE.md`.
+
+## Status: shipped
+
+Released as [`autosource/v2.2.6.2`](https://github.com/BoyuanZhangDE/Kazumi/releases/tag/autosource/v2.2.6.2)
+(macOS `.dmg` + Windows `.zip`, unsigned, desktop-only fork).
+
+All six of the original requirements are met and verified:
+
+| # | Requirement | Evidence |
+|---|---|---|
+| 1 | 开始观看 straight to player; 片源 left of 播放线路 | I1 passes; dropdown renders before 播放线路 in `video_page.dart` |
+| 2 | Default to a source that does not time out | Playback started in 3518ms on `fcdm` |
+| 3 | Fast, parallel, well-timed | Concurrency 3; `completed order: [fcdm]` — losers abandoned |
+| 4 | Persist per show, reuse next open | A1: cached source ranked first; A3: record updated to the actual winner |
+| 5 | Re-poke on timeout, update the list | `视频解析超时，请重试` no longer reachable; B3 proves recovery on resume |
+| 6 | Stop at the first working source | `completed order: [fcdm]` |
+
+
 
 Design constraint held throughout: every unit takes its I/O as an injected
 dependency and never reaches for a WebView or Hive directly.
