@@ -180,6 +180,12 @@ builds, `contents: write` only for the release job).
   reached signature verification, so the paired secret remains unvalidated.
   **Parked** pending a working AppId. The signing scheme itself is correct:
   `base64(sha256(appId + timestamp + path + secret))`, verified independently.
+  Empty `KAZUMI_*` used to also break Bangumi search and the three comment
+  surfaces, since those requests get signed for the `api.kazumi.fyi` mirror
+  and empty credentials draw a 401. Unsigned builds now bypass the mirror
+  entirely (guard in `resolveBangumiMirrorPath` / `shouldSignProtectedMirrorRequest`
+  in `lib/request/core/dio_factory.dart` / `lib/request/clients/bangumi_client.dart`,
+  pinned by `test/bangumi_mirror_guard_test.dart`).
 - Gate B of the source probe validates the *playlist*, not the *media*, so a
   mid-episode stall is not caught. See the design doc's "Honest limits".
 - `pickBestMatch` breaks ties by list order; Levenshtein cannot separate season

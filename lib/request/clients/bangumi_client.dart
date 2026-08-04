@@ -79,7 +79,12 @@ class BangumiClient {
     if ((requiresAuth || bangumiSyncEnable) && token.isNotEmpty) {
       headers['Authorization'] = 'Bearer $token';
     }
-    if (_shouldSignProtectedMirrorRequest(url, method)) {
+    if (shouldSignProtectedMirrorRequest(
+      url: url,
+      method: method,
+      proxyEnabled: GStorage.getSetting(SettingsKeys.enableBangumiProxy),
+      mirrorAppId: bangumiMirrorCredentials['id']!,
+    )) {
       final timestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
       final body = data == null ? '' : jsonEncode(data);
       headers['X-AppId'] = bangumiMirrorCredentials['id'];
@@ -93,25 +98,30 @@ class BangumiClient {
     }
     return headers;
   }
+}
 
-  bool _shouldSignProtectedMirrorRequest(String? url, String method) {
-    if (url == null) {
-      return false;
-    }
-    final enableBangumiProxy =
-        GStorage.getSetting(SettingsKeys.enableBangumiProxy);
-    if (!enableBangumiProxy) {
-      return false;
-    }
-    final path = Uri.parse(url).path;
-    if (method == 'POST' && path == '/v0/search/subjects') {
-      return true;
-    }
-    if (method != 'GET') {
-      return false;
-    }
-    return path.startsWith('/p1/subjects/') && path.endsWith('/comments') ||
-        path.startsWith('/p1/episodes/') && path.endsWith('/comments') ||
-        path.startsWith('/p1/characters/') && path.endsWith('/comments');
+/// Whether a request must carry the mirror signature headers. Unsigned builds
+/// (empty [mirrorAppId]) never sign: their requests are not mirrored at all.
+bool shouldSignProtectedMirrorRequest({
+  required String? url,
+  required String method,
+  required bool proxyEnabled,
+  required String mirrorAppId,
+}) {
+  if (url == null) {
+    return false;
   }
+  if (!proxyEnabled || mirrorAppId.isEmpty) {
+    return false;
+  }
+  final path = Uri.parse(url).path;
+  if (method == 'POST' && path == '/v0/search/subjects') {
+    return true;
+  }
+  if (method != 'GET') {
+    return false;
+  }
+  return path.startsWith('/p1/subjects/') && path.endsWith('/comments') ||
+      path.startsWith('/p1/episodes/') && path.endsWith('/comments') ||
+      path.startsWith('/p1/characters/') && path.endsWith('/comments');
 }

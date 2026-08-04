@@ -4,6 +4,7 @@ import 'package:kazumi/request/core/dio_logger_interceptor.dart';
 import 'package:kazumi/request/core/network_config.dart';
 import 'package:kazumi/services/logging/logger.dart';
 import 'package:kazumi/services/storage/storage.dart';
+import 'package:kazumi/utils/bangumi_mirror_credentials.dart';
 import 'package:kazumi/utils/http_headers.dart';
 
 class DioFactory {
@@ -88,30 +89,43 @@ class DioFactory {
   }
 }
 
-class _BangumiMirrorInterceptor extends Interceptor {
-  static const _mirrorableHosts = {
-    'api.bgm.tv',
-    'next.bgm.tv',
-  };
+const _mirrorableBangumiHosts = {
+  'api.bgm.tv',
+  'next.bgm.tv',
+};
 
+/// Returns the mirrored URL for [uri], or null when the request must not be
+/// mirrored: proxy disabled, non-Bangumi host, or an unsigned build (no
+/// mirror app id baked in) that the mirror would reject with 401.
+String? resolveBangumiMirrorPath(
+  Uri uri, {
+  required bool proxyEnabled,
+  required String mirrorAppId,
+}) {
+  if (!proxyEnabled || mirrorAppId.isEmpty) {
+    return null;
+  }
+  if (!_mirrorableBangumiHosts.contains(uri.host)) {
+    return null;
+  }
+  return ApiEndpoints.bangumiMirrorDomain +
+      uri.path +
+      (uri.hasQuery ? '?${uri.query}' : '');
+}
+
+class _BangumiMirrorInterceptor extends Interceptor {
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
-    final enableBangumiProxy =
-        GStorage.getSetting(SettingsKeys.enableBangumiProxy);
-    if (!enableBangumiProxy) {
+    final mirrored = resolveBangumiMirrorPath(
+      options.uri,
+      proxyEnabled: GStorage.getSetting(SettingsKeys.enableBangumiProxy),
+      mirrorAppId: bangumiMirrorCredentials['id']!,
+    );
+    if (mirrored == null) {
       handler.next(options);
       return;
     }
 
-    final uri = options.uri;
-    if (!_mirrorableHosts.contains(uri.host)) {
-      handler.next(options);
-      return;
-    }
-
-    final mirrored = ApiEndpoints.bangumiMirrorDomain +
-        uri.path +
-        (uri.hasQuery ? '?${uri.query}' : '');
     KazumiLogger().d('Bangumi mirror: $mirrored');
     options.path = mirrored;
     handler.next(options);
