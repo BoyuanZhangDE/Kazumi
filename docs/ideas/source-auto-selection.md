@@ -94,10 +94,45 @@ Honest limits, as built:
 
 - Gate B validates the *playlist*, not the *media*. It does not fetch segment
   bytes, so a playlist that parses fine while its segment host is dead still
-  passes. Adding that check needs a byte-range capability that
-  `HttpProbeGetFn` (whose response body is a `String`) cannot express — a
-  binary-safe HEAD/Range function would have to be added deliberately.
-- Nothing short of playing catches a mid-episode stall.
+  passes. The probe now does send a ranged request, but `HttpProbeResponse.body`
+  is still a `String`, so segment-byte validation would still need a
+  binary-safe response path added deliberately.
+- **A winner can pass both gates and still not play.** Live incident
+  (2026-08-03, gugu3): the race returned a byteimg.com URL that *is* genuine
+  media — `content-type: video/mp4`, `ftypisom` magic bytes, 397 MB — so both
+  gates were right to accept it. mpv then failed with `ffurl_read returned
+  0xffffffc4` (`-60` = `ETIMEDOUT` on macOS): the CDN accepted the request and
+  stalled the read. No pre-flight validation can catch this class; only the
+  player knows. That is what the playback-start feedback path below is for.
+  (First diagnosis of this incident blamed a cover image, misled by the
+  `~tplv-…-image.image` in the URL path. It was verified media. Check the
+  bytes, not the URL.)
+- Gate B's non-playlist path is a sniff, not a decode: it rejects `image/*`
+  and `text/*` content types and HTML/GIF bodies, so error pages and posters
+  can't win a race. An image mislabeled `application/octet-stream` with no
+  recognizable magic prefix would still pass.
+- Gate B reads at most the first 64 KB of any response. It previously did a
+  full-body `GET` with `ResponseType.plain`, so probing the 397 MB winner
+  above pulled all 397 MB into a Dart string before validating it. Correctness
+  comes from the client-side cap (the stream is cancelled at 64 KB); the
+  `Range: bytes=0-65535` request header is only a bandwidth optimization on
+  top. Because that header makes compliant servers answer **206**, Gate B must
+  accept 206 everywhere — a 200-only check silently rejects every playlist
+  from a Range-honoring CDN, which is how this was nearly shipped broken.
+  Residual risk: a non-compliant server that answers 416/400 to a ranged
+  request is read as a failed source. Verified fine on real HLS CDNs; if a
+  source ever fails this way, retry once without the header rather than
+  removing the cap.
+- Nothing short of playing catches a mid-episode stall — deliberately. The
+  player feeds back only fatal *startup* failures (error while duration and
+  position are both still zero, re-confirmed 2s later) into
+  `_recoverFromResolveFailure`; a mid-play error never triggers a source
+  swap, and a manual pick is never swapped even on startup failure.
+- Playback-start recovery excludes every source that already failed *startup*
+  for this episode, not just the one that failed last. Excluding only the
+  latter lets two bad sources ping-pong forever, each swap paying for a full
+  WebView resolve. The exclusion set clears on an explicit episode/road/source
+  change, never on the recovery path itself.
 
 ### Why the cache is a hint, not a promise
 
@@ -105,6 +140,14 @@ The persisted record orders the race; it never short-circuits it. A stale entry
 therefore costs nothing — the user never sits through a timeout waiting to
 discover the cached source died. This is the property that makes persistence safe
 for sources that break weekly.
+
+One caveat learned the hard way: the record is written when a candidate wins the
+*probe*, which is not proof it will *play*. A winner that then fails playback
+start would otherwise stay cached as good and be ranked first on every open for
+the full 7-day TTL — costing a failed playback plus a recovery race each time,
+which is exactly the "~0 cost" property above being violated. So a playback-start
+failure now drops the cached record, but only when it names the source that
+actually failed; a record naming a different plugin is still a useful hint.
 
 ## Key Assumptions to Validate
 

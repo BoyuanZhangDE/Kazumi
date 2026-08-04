@@ -187,6 +187,16 @@ abstract class _VideoPageController with Store implements Disposable {
   final Map<String, _SourceCandidate> _sourceCandidatesByPlugin = {};
   Timer? _probePanelTimer;
 
+  /// Plugins that have already failed playback START for the CURRENT
+  /// episode, so a recovery race never re-picks them. Without this, two bad
+  /// sources ping-pong forever: A fails -> recovery excludes A, picks B ->
+  /// B fails -> recovery excludes only B (A is "eligible" again) -> picks A
+  /// -> repeat. Control flow only, never rendered — not @observable. Cleared
+  /// in [changeEpisode] (a genuine move-on), never in [_beginEpisodeSwitch]
+  /// (which recovery itself calls, so clearing there would wipe the set on
+  /// every recovery attempt and reintroduce the same infinite loop).
+  final Set<String> _playbackStartFailedPlugins = <String>{};
+
   @observable
   var availableSourceNames = ObservableList<String>();
 
@@ -513,6 +523,13 @@ abstract class _VideoPageController with Store implements Disposable {
       episode: episode,
       road: currentRoad,
     );
+    // A genuine move-on (explicit episode/road switch, or the 片源 dropdown
+    // manual pick via [switchToSource], both of which funnel through here):
+    // playback-start failures recorded against the OLD episode no longer
+    // apply. Deliberately not in [_beginEpisodeSwitch] — that is also called
+    // by [recoverFromPlaybackStartFailure] itself, and clearing there would
+    // erase the very failure just recorded, undoing the fix below.
+    _playbackStartFailedPlugins.clear();
     _beginEpisodeSwitch(selection);
     _danmakuSessions.cancel();
     playerController.danmaku.finishDanmakuLoad();
@@ -735,6 +752,8 @@ abstract class _VideoPageController with Store implements Disposable {
         bangumiName: bangumiItem.nameCn.isNotEmpty
             ? bangumiItem.nameCn
             : bangumiItem.name,
+        onPlaybackStartFailure: () => unawaited(
+            recoverFromPlaybackStartFailure(playerController: playerController)),
       );
 
       final initialized = await playerController.init(params);
@@ -1227,10 +1246,15 @@ abstract class _VideoPageController with Store implements Disposable {
       offset: Duration.zero,
     );
 
+    final eligibleNames = eligibleRecoveryPlugins(
+      known: _sourceCandidatesByPlugin.keys,
+      seedPluginName: seedPluginName,
+      playbackStartFailed: _playbackStartFailedPlugins,
+    );
+
     final targetByPlugin = <String, EpisodeTarget>{};
     final candidates = <ProbeCandidate>[];
-    for (final name in _sourceCandidatesByPlugin.keys) {
-      if (name == seedPluginName) continue; // already failed, don't retry it
+    for (final name in eligibleNames) {
       final source = _sourceCandidatesByPlugin[name]!;
       final target = remapForSourceSwap(
         original: failedTarget,
@@ -1288,6 +1312,61 @@ abstract class _VideoPageController with Store implements Disposable {
     }
   }
 
+  /// Feeds a fatal player STARTUP failure (media never loaded — see
+  /// [isFatalPlaybackStartError]) into the same recovery race
+  /// [_recoverFromResolveFailure] uses for a failed resolve. Handles the case
+  /// where a resolve "succeeds" (the URL parses and passes both probe gates)
+  /// but the player still can't actually play it. Observed live: a winner
+  /// that was genuine video by every pre-flight measure — right content type,
+  /// right magic bytes — whose CDN then stalled the read (`ffurl_read`
+  /// `ETIMEDOUT`). No validation can catch that class; only the player finds
+  /// out. Without this, such a failure left the UI stuck at playing=true,
+  /// position 0:00 forever.
+  ///
+  /// Same manual-pick and re-entrancy rules as resolve recovery: an explicit
+  /// user pick is never auto-swapped away, and a recovery already in flight
+  /// (or an unrelated episode switch) is not interrupted by a second one.
+  Future<void> recoverFromPlaybackStartFailure({
+    required PlayerController playerController,
+  }) async {
+    if (_currentSourceIsManual) {
+      KazumiLogger().i(
+          'VideoPageController: playback start failed on manually-picked source ${currentPlugin.name}, not auto-swapping');
+      return;
+    }
+    if (_loading) {
+      // Already mid-switch or mid-recovery — a second failure event for the
+      // same dead player must not start a duplicate race.
+      return;
+    }
+
+    KazumiLogger().w(
+        'VideoPageController: playback start failed on ${currentPlugin.name}, attempting recovery');
+
+    // Record BEFORE racing so this source is excluded from the candidate
+    // list below — see [_playbackStartFailedPlugins] doc comment.
+    _playbackStartFailedPlugins.add(currentPlugin.name);
+
+    // A probe win only proves the playlist parses, not that the player can
+    // actually play it — this failure just disproved it. Leaving the record
+    // cached would make the next open of this show re-pick and re-fail the
+    // same known-bad source. Only drop it if it still names this plugin; a
+    // record naming a different plugin is unrelated and must survive.
+    final cachedRecord = _playableSourceCache.get(bangumiItem.id);
+    if (shouldInvalidateForPlaybackFailure(
+        record: cachedRecord, failedPluginName: currentPlugin.name)) {
+      await _playableSourceCache.invalidate(bangumiItem.id);
+    }
+
+    final session = _playbackSessions.begin();
+    _beginEpisodeSwitch(selectedEpisode);
+
+    await _recoverFromResolveFailure(
+      session: session,
+      playerController: playerController,
+    );
+  }
+
   Future<void> _playProbeWinner(
     ProbeResult result,
     EpisodeRef resolvedEpisode, {
@@ -1317,6 +1396,8 @@ abstract class _VideoPageController with Store implements Disposable {
       coverUrl: bangumiItem.images['large'],
       bangumiName:
           bangumiItem.nameCn.isNotEmpty ? bangumiItem.nameCn : bangumiItem.name,
+      onPlaybackStartFailure: () => unawaited(
+          recoverFromPlaybackStartFailure(playerController: playerController)),
     );
 
     final initialized = await playerController.init(params);

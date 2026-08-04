@@ -92,3 +92,19 @@ EpisodeTarget remapForSourceSwap({
     offset: Duration.zero,
   );
 }
+
+/// Plugin names eligible for a recovery race: everything known for this show
+/// except the source that just failed and any source already known to have
+/// failed playback START for this episode. Without the second exclusion,
+/// two bad sources ping-pong forever, each recovery swapping back to the
+/// other (each cycle costing a full WebView resolve).
+List<String> eligibleRecoveryPlugins({
+  required Iterable<String> known,
+  required String seedPluginName,
+  required Set<String> playbackStartFailed,
+}) {
+  return known
+      .where((name) =>
+          name != seedPluginName && !playbackStartFailed.contains(name))
+      .toList();
+}

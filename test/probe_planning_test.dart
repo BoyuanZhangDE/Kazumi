@@ -257,4 +257,64 @@ void main() {
       );
     });
   });
+
+  group('eligibleRecoveryPlugins', () {
+    test('excludes the seed plugin', () {
+      final result = eligibleRecoveryPlugins(
+        known: ['A', 'B', 'C'],
+        seedPluginName: 'B',
+        playbackStartFailed: {},
+      );
+
+      expect(result, ['A', 'C']);
+    });
+
+    test('excludes playback-start-failed plugins', () {
+      final result = eligibleRecoveryPlugins(
+        known: ['A', 'B', 'C'],
+        seedPluginName: 'C',
+        playbackStartFailed: {'A'},
+      );
+
+      expect(result, ['B']);
+    });
+
+    test(
+        'REGRESSION ping-pong: seed + one prior playback-start failure '
+        'exhausts a two-source show instead of looping', () {
+      // State after A then B both failed playback start: A failed first
+      // (recorded), B is the seed that just failed now. Without excluding
+      // A too, this would return [A] and the recovery race would swap back
+      // to A, which would fail again, forever.
+      final result = eligibleRecoveryPlugins(
+        known: ['A', 'B'],
+        seedPluginName: 'B',
+        playbackStartFailed: {'A'},
+      );
+
+      expect(result, isEmpty);
+    });
+
+    test(
+        'empty playbackStartFailed behaves exactly like the old seed-only '
+        'filter (back-compat pin)', () {
+      final result = eligibleRecoveryPlugins(
+        known: ['A', 'B', 'C'],
+        seedPluginName: 'A',
+        playbackStartFailed: {},
+      );
+
+      expect(result, ['B', 'C']);
+    });
+
+    test('order of known is preserved', () {
+      final result = eligibleRecoveryPlugins(
+        known: ['C', 'A', 'B'],
+        seedPluginName: 'X',
+        playbackStartFailed: {},
+      );
+
+      expect(result, ['C', 'A', 'B']);
+    });
+  });
 }

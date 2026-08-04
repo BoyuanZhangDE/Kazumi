@@ -24,6 +24,19 @@ import 'package:kazumi/services/platform/platform_environment_service.dart';
 
 part 'player_playback_controller.g.dart';
 
+/// A player error is a fatal STARTUP failure -- worth swapping sources over --
+/// only when media never loaded at all (duration and position both still
+/// zero). Mid-play errors are transient and must not trigger a source swap.
+bool isFatalPlaybackStartError({
+  required Duration position,
+  required Duration duration,
+  required bool alreadyTriggered,
+}) {
+  return !alreadyTriggered &&
+      position == Duration.zero &&
+      duration == Duration.zero;
+}
+
 class PlayerPlaybackController = _PlayerPlaybackController
     with _$PlayerPlaybackController;
 
@@ -234,6 +247,7 @@ abstract class _PlayerPlaybackController with Store {
     bool adBlockerEnabled, {
     required bool Function() canInstall,
     int offset = 0,
+    void Function()? onPlaybackStartFailure,
   }) async {
     startOffset = offset;
     superResolutionMode = SuperResolutionMode.fromStorageValue(
@@ -384,6 +398,9 @@ abstract class _PlayerPlaybackController with Store {
       }
 
       bool showPlayerError = GStorage.getSetting(SettingsKeys.showPlayerError);
+      // Latched per player instance: multiple mpv error events for the same
+      // dead startup must schedule only one recovery attempt.
+      bool playbackStartFailureTriggered = false;
       player.stream.error.listen((event) {
         if (showPlayerError) {
           if (!isCurrentPlayer(player)) {
@@ -401,6 +418,28 @@ abstract class _PlayerPlaybackController with Store {
         }
         KazumiLogger().e('PlayerController: Player intent error ${videoUrl()}',
             error: event);
+
+        if (onPlaybackStartFailure != null &&
+            isCurrentPlayer(player) &&
+            isFatalPlaybackStartError(
+              position: player.state.position,
+              duration: player.state.duration,
+              alreadyTriggered: playbackStartFailureTriggered,
+            )) {
+          playbackStartFailureTriggered = true;
+          // Give the player a moment to recover on its own (e.g. a transient
+          // hiccup that resolves within moments) before swapping sources.
+          Future.delayed(const Duration(seconds: 2), () {
+            if (!isCurrentPlayer(player)) {
+              return;
+            }
+            if (player.state.position != Duration.zero ||
+                player.state.duration != Duration.zero) {
+              return;
+            }
+            onPlaybackStartFailure();
+          });
+        }
       });
 
       if (superResolutionMode != SuperResolutionMode.off) {

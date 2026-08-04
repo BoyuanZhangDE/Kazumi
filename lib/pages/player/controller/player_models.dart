@@ -18,6 +18,11 @@ class PlaybackInitParams {
   final String? coverUrl;
   final String? bangumiName;
 
+  /// Invoked when the player fires a fatal STARTUP failure (media never
+  /// loaded) shortly after this init handed off to it. Left null for
+  /// playback paths that have no recovery to fall back to (e.g. offline).
+  final void Function()? onPlaybackStartFailure;
+
   const PlaybackInitParams({
     required this.videoUrl,
     required this.offset,
@@ -35,6 +40,7 @@ class PlaybackInitParams {
     this.sortNumber,
     this.coverUrl,
     this.bangumiName,
+    this.onPlaybackStartFailure,
   });
 }
 

@@ -36,6 +36,16 @@ class PlayableSourceRecord {
   }
 }
 
+/// Whether a cached record should be dropped because the source it names is
+/// the one that just failed playback START. A record naming a DIFFERENT
+/// plugin is still a useful hint and must survive.
+bool shouldInvalidateForPlaybackFailure({
+  required PlayableSourceRecord? record,
+  required String failedPluginName,
+}) {
+  return record != null && record.pluginName == failedPluginName;
+}
+
 /// Returns the raw JSON blob previously written, or null when absent.
 typedef CacheReadFn = String? Function();
 typedef CacheWriteFn = Future<void> Function(String json);

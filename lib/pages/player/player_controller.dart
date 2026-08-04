@@ -202,6 +202,7 @@ class PlayerController implements Disposable {
         params.adBlockerEnabled,
         canInstall: () => initialization.isActive,
         offset: params.offset,
+        onPlaybackStartFailure: params.onPlaybackStartFailure,
       );
     } catch (e) {
       if (initialization.isStale) {

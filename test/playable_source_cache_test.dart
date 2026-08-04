@@ -170,4 +170,52 @@ void main() {
       expect(cache.get(1), isNull);
     });
   });
+
+  group('shouldInvalidateForPlaybackFailure', () {
+    test('returns true when the record names the failed plugin', () {
+      final record = PlayableSourceRecord(
+        pluginName: 'plugin_a',
+        src: 'src_a',
+        roadIndex: 0,
+        lastGoodAt: DateTime.utc(2026, 1, 1),
+      );
+
+      expect(
+        shouldInvalidateForPlaybackFailure(
+          record: record,
+          failedPluginName: 'plugin_a',
+        ),
+        isTrue,
+      );
+    });
+
+    test(
+        'a record naming a DIFFERENT plugin must survive (returns false)',
+        () {
+      final record = PlayableSourceRecord(
+        pluginName: 'plugin_a',
+        src: 'src_a',
+        roadIndex: 0,
+        lastGoodAt: DateTime.utc(2026, 1, 1),
+      );
+
+      expect(
+        shouldInvalidateForPlaybackFailure(
+          record: record,
+          failedPluginName: 'plugin_b',
+        ),
+        isFalse,
+      );
+    });
+
+    test('returns false when the record is null', () {
+      expect(
+        shouldInvalidateForPlaybackFailure(
+          record: null,
+          failedPluginName: 'plugin_a',
+        ),
+        isFalse,
+      );
+    });
+  });
 }
